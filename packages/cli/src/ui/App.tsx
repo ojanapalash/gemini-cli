@@ -67,6 +67,7 @@ import {
   useSessionStats,
 } from './contexts/SessionContext.js';
 import { useGitBranchName } from './hooks/useGitBranchName.js';
+import { useFocus } from './hooks/useFocus.js';
 import { useBracketedPaste } from './hooks/useBracketedPaste.js';
 import { useTextBuffer } from './components/shared/text-buffer.js';
 import * as fs from 'fs';
@@ -169,6 +170,7 @@ export const AppWrapper = (props: AppProps) => (
 );
 
 const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
+  const isFocused = useFocus();
   useBracketedPaste();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -1023,6 +1025,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                   commandContext={commandContext}
                   shellModeActive={shellModeActive}
                   setShellModeActive={setShellModeActive}
+                  focus={isFocused}
                 />
               )}
             </>
