@@ -58,6 +58,8 @@ import {
   FlashFallbackEvent,
   logFlashFallback,
   AuthType,
+  type ActiveFile,
+  ideContext,
 } from '@google/gemini-cli-core';
 import { validateAuthMethod } from '../config/auth.js';
 import { useLogger } from './hooks/useLogger.js';
@@ -247,6 +249,14 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const [modelSwitchedFromQuotaError, setModelSwitchedFromQuotaError] =
     useState<boolean>(false);
   const [userTier, setUserTier] = useState<UserTierId | undefined>(undefined);
+  const [activeFile, setActiveFile] = useState<ActiveFile | undefined>();
+
+  useEffect(() => {
+    const unsubscribe = ideContext.subscribeToActiveFile(setActiveFile);
+    // Set the initial value
+    setActiveFile(ideContext.getActiveFileContext());
+    return unsubscribe;
+  }, []);
 
   const openPrivacyNotice = useCallback(() => {
     setShowPrivacyNotice(true);
@@ -979,6 +989,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                     </Text>
                   ) : (
                     <ContextSummaryDisplay
+                      activeFile={activeFile}
                       geminiMdFileCount={geminiMdFileCount}
                       contextFileNames={contextFileNames}
                       mcpServers={config.getMcpServers()}

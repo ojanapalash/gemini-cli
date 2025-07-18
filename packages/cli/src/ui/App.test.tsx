@@ -15,6 +15,7 @@ import {
   AccessibilitySettings,
   SandboxConfig,
   GeminiClient,
+  ideContext,
 } from '@google/gemini-cli-core';
 import { LoadedSettings, SettingsFile, Settings } from '../config/settings.js';
 import process from 'node:process';
@@ -148,11 +149,18 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
         getIdeMode: vi.fn(() => false),
       };
     });
+
+  const ideContextMock = {
+    getActiveFileContext: vi.fn(),
+    subscribeToActiveFile: vi.fn(() => vi.fn()), // subscribe returns an unsubscribe function
+  };
+
   return {
     ...actualCore,
     Config: ConfigClassMock,
     MCPServerConfig: actualCore.MCPServerConfig,
     getAllGeminiMdFilenames: vi.fn(() => ['GEMINI.md']),
+    ideContext: ideContextMock,
   };
 });
 
@@ -266,6 +274,7 @@ describe('App UI', () => {
 
     // Ensure a theme is set so the theme dialog does not appear.
     mockSettings = createMockSettings({ workspace: { theme: 'Default' } });
+    vi.mocked(ideContext.getActiveFileContext).mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -434,6 +443,64 @@ describe('App UI', () => {
     });
   });
 
+  it('should display active file when available', async () => {
+    vi.mocked(ideContext.getActiveFileContext).mockReturnValue({
+      filePath: '/path/to/my-file.ts',
+      content: 'const a = 1;',
+      cursor: 0,
+    });
+
+    const { lastFrame, unmount } = render(
+      <App
+        config={mockConfig as unknown as ServerConfig}
+        settings={mockSettings}
+        version={mockVersion}
+      />,
+    );
+    currentUnmount = unmount;
+    await Promise.resolve();
+    expect(lastFrame()).toContain('Open File (my-file.ts)');
+  });
+
+  it('should not display active file when not available', async () => {
+    vi.mocked(ideContext.getActiveFileContext).mockReturnValue({
+      filePath: '',
+      content: '',
+      cursor: 0,
+    });
+
+    const { lastFrame, unmount } = render(
+      <App
+        config={mockConfig as unknown as ServerConfig}
+        settings={mockSettings}
+        version={mockVersion}
+      />,
+    );
+    currentUnmount = unmount;
+    await Promise.resolve();
+    expect(lastFrame()).not.toContain('Open File');
+  });
+
+  it('should display active file and other context', async () => {
+    vi.mocked(ideContext.getActiveFileContext).mockReturnValue({
+      filePath: '/path/to/my-file.ts',
+      content: 'const a = 1;',
+      cursor: 0,
+    });
+    mockConfig.getGeminiMdFileCount.mockReturnValue(1);
+
+    const { lastFrame, unmount } = render(
+      <App
+        config={mockConfig as unknown as ServerConfig}
+        settings={mockSettings}
+        version={mockVersion}
+      />,
+    );
+    currentUnmount = unmount;
+    await Promise.resolve();
+    expect(lastFrame()).toContain('Open File (my-file.ts) | 1 GEMINI.md File');
+  });
+
   it('should display default "GEMINI.md" in footer when contextFileName is not set and count is 1', async () => {
     mockConfig.getGeminiMdFileCount.mockReturnValue(1);
     // For this test, ensure showMemoryUsage is false or debugMode is false if it relies on that
@@ -449,7 +516,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve(); // Wait for any async updates
-    expect(lastFrame()).toContain('Using 1 GEMINI.md file');
+    expect(lastFrame()).toContain('Using: 1 GEMINI.md File');
   });
 
   it('should display default "GEMINI.md" with plural when contextFileName is not set and count is > 1', async () => {
@@ -466,7 +533,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('Using 2 GEMINI.md files');
+    expect(lastFrame()).toContain('Using: 2 GEMINI.md Files');
   });
 
   it('should display custom contextFileName in footer when set and count is 1', async () => {
@@ -486,7 +553,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('Using 1 AGENTS.md file');
+    expect(lastFrame()).toContain('Using: 1 AGENTS.md File');
   });
 
   it('should display a generic message when multiple context files with different names are provided', async () => {
@@ -509,7 +576,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('Using 2 context files');
+    expect(lastFrame()).toContain('Using: 2 Context Files');
   });
 
   it('should display custom contextFileName with plural when set and count is > 1', async () => {
@@ -529,7 +596,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('Using 3 MY_NOTES.TXT files');
+    expect(lastFrame()).toContain('Using: 3 MY_NOTES.TXT Files');
   });
 
   it('should not display context file message if count is 0, even if contextFileName is set', async () => {
@@ -569,7 +636,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('server');
+    expect(lastFrame()).toContain('1 MCP Server');
   });
 
   it('should display only MCP server count when GEMINI.md count is 0', async () => {
@@ -590,7 +657,7 @@ describe('App UI', () => {
     );
     currentUnmount = unmount;
     await Promise.resolve();
-    expect(lastFrame()).toContain('Using 2 MCP servers');
+    expect(lastFrame()).toContain('Using: 2 MCP Servers');
   });
 
   it('should display Tips component by default', async () => {
